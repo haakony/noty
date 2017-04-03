@@ -6,7 +6,9 @@ var util = require('util');
 var zummerStrings = require('./zummer-strings.js');
 var bingSearchService = require('./bing-search-service.js');
 var bingSummarizerService = require('./bing-summarizer-service.js');
+var ConversationStrings = require('./ConversationStrings.js');
 var urlObj = require('url');
+var uniqueRandomArray = require('unique-random-array');
 //require('./dicer.js');
 //=========================================================
 // Bot Setup
@@ -42,6 +44,23 @@ var intents = new builder.IntentDialog({ recognizers: [recognizer] });
 
 
 bot.dialog('/', intents);
+
+
+var dontunderstand = uniqueRandomArray([
+    "I'm sorry. I didn't understand.",
+    "What are you talking about ?",
+    "wtf ?",
+    "What ?",
+    "I like icecream to",
+    "sakkosekk",
+    "I'm sorry. I didn't understand.",
+    "I'm sorry. I didn't understand.",
+    "I'm sorry. I didn't understand."
+]);
+
+intents.onDefault(builder.DialogAction.send(dontunderstand()));
+
+
 
 intents.matches('Greeting', [
     function (session, args, next) {
@@ -352,7 +371,7 @@ intents.matches('GetLastTickHackerWars', [
 
 
 
-intents.onDefault(builder.DialogAction.send("I'm sorry. I didn't understand."));
+
 
 
 
@@ -406,7 +425,7 @@ intents.matches(/^last tick/i, function (session) {
 
 
 intents.matches(/^version/i, function (session) {
-    session.send('I am Noty v0.02');
+    session.send('I am Noty v0.03');
 });
 
 
