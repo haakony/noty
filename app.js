@@ -1,6 +1,12 @@
+require('dotenv-extended').load();
 var restify = require('restify');
 var builder = require('botbuilder');
-
+var apiHandler = require('./api-handler-service');
+var util = require('util');
+var zummerStrings = require('./zummer-strings.js');
+var bingSearchService = require('./bing-search-service.js');
+var bingSummarizerService = require('./bing-summarizer-service.js');
+var urlObj = require('url');
 
 //=========================================================
 // Bot Setup
@@ -14,13 +20,20 @@ server.listen(process.env.port || process.env.PORT || 3978, function () {
 
 // Create chat bot
 var connector = new builder.ChatConnector({
-    appId: '76f2f054-8cab-4a46-9d05-20fae3bbf84d',
-    appPassword: 'wfEdmpuCEWYqtXPXSU4QSwm'
+    appId: process.env.MICROSOFT_APP_ID,
+    appPassword: process.env.MICROSOFT_APP_PASSWORD
 });
 var bot = new builder.UniversalBot(connector);
 server.post('/api/messages', connector.listen());
 var recognizer = new builder.LuisRecognizer('https://westus.api.cognitive.microsoft.com/luis/v2.0/apps/f685cfa9-87d4-4ba0-9c96-a7e02ac8b7d9?subscription-key=1880aee1ec4d4cb1919e61f7547081a0&verbose=true&timezoneOffset=0.0&q=');
 var intents = new builder.IntentDialog({ recognizers: [recognizer] });
+
+
+
+
+
+
+
 
 
 //=========================================================
@@ -32,6 +45,77 @@ bot.dialog('/', intents);
 
 
 
+
+//wiki search
+
+intents.matches('Greeting', [
+        (session) => {
+            session.send(zummerStrings.GreetOnDemand).endDialog();
+        }
+    ])
+    .matches('Search', [
+        (session, args) => {
+            var entityRecognized;
+            var query;
+
+            if ((entityRecognized = builder.EntityRecognizer.findEntity(args.entities, 'ArticleTopic'))) {
+                query = entityRecognized.entity;
+            } else {
+                query = session.message.text;
+            }
+
+            bingSearchService.findArticles(query).then((bingSearch) => {
+
+                session.send(zummerStrings.SearchTopicTypeMessage);
+
+                var zummerResult = prepareZummerResult(query, bingSearch.webPages.value[0]);
+
+                bingSummarizerService.getSummary(zummerResult.url).then((bingSummary) => {
+                    if (bingSummary && bingSummary.Data && bingSummary.Data.lenght != 0) {
+
+                        var summaryText = util.format("### [%s](%s)\n**%s**\n\n", zummerResult.title, zummerResult.url, zummerStrings.SummaryString);
+
+                        bingSummary.Data.forEach((datum) => {
+                            summaryText += datum.Text + "\n\n";
+                        });
+
+                        summaryText += util.format("*%s*", util.format(zummerStrings.PoweredBy, util.format("[Bing™](https://www.bing.com/search/?q=%s site:wikipedia.org)", zummerResult.query)));
+
+                        session.send(summaryText).endDialog();
+                    } else {
+                        session.send(zummerStrings.SummaryErrorMessage).endDialog();
+                    }
+                }).catch(() => { session.send(zummerStrings.SummaryErrorMessage).endDialog(); });
+            }).catch(() => {
+                session.endDialog();
+            });
+        }
+    ])
+    .onDefault((session) => {
+        session.send(zummerStrings.FallbackIntentMessage).endDialog();
+    }); 
+
+
+
+
+function prepareZummerResult(query, bingSearchResult) {
+    var myUrl = urlObj.parse(bingSearchResult.url, true);
+    var zummerResult = {};
+
+    if (myUrl.host == "www.bing.com" && myUrl.pathname == "/cr") {
+        zummerResult.url = myUrl.query["r"];
+    } else {
+        zummerResult.url = bingSearchResult.url;
+    }
+
+    zummerResult.title = bingSearchResult.name;
+    zummerResult.query = query;
+    zummerResult.snippet = bingSearchResult.snippet;
+
+    return zummerResult;
+}
+
+//end wiki
 
 
 intents.matches('SayTest', [
@@ -155,5 +239,10 @@ intents.matches(/^last tick/i, function (session) {
 
 
 intents.matches(/^version/i, function (session) {
-    session.send('I am Noty v0.01');
+    session.send('I am Noty v0.02');
 });
+
+
+
+
+
