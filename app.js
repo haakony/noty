@@ -155,5 +155,5 @@ intents.matches(/^last tick/i, function (session) {
 
 
 intents.matches(/^version/i, function (session) {
-    session.send('I am Noty v0');
+    session.send('I am Noty v0.01');
 });
