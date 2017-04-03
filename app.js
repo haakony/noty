@@ -43,17 +43,41 @@ var intents = new builder.IntentDialog({ recognizers: [recognizer] });
 
 bot.dialog('/', intents);
 
+intents.matches('Greeting', [
+    function (session, args, next) {
+        if (!session.userData.name) {
+            session.beginDialog('/profile');
+        } else {
+            next();
+        }
+    },
+    function (session, results) {
+        session.send('Hello %s!', session.userData.name);
+    }
+]);
+
+    
+
+bot.dialog('/profile', [
+    function (session) {
+        builder.Prompts.text(session, 'Hi! What is your name?');
+    },
+    function (session, results) {
+        session.userData.name = results.response;
+        session.endDialog();
+    }
+]);
+
+
+
+
 
 
 
 //wiki search
 
-intents.matches('Greeting', [
-        (session) => {
-            session.send(zummerStrings.GreetOnDemand).endDialog();
-        }
-    ])
-    .matches('Search', [
+
+intents.matches('Search', [
         (session, args) => {
             var entityRecognized;
             var query;

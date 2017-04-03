@@ -61,3 +61,15 @@ bot.dialog('/profile', [
     }
 ]);
 
+
+
+
+
+
+--
+intents.matches('Greeting', [
+        (session) => {
+            session.send(zummerStrings.GreetOnDemand).endDialog();
+        }
+    ])
+
