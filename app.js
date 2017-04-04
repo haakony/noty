@@ -6,7 +6,7 @@ var util = require('util');
 var zummerStrings = require('./zummer-strings.js');
 var bingSearchService = require('./bing-search-service.js');
 var bingSummarizerService = require('./bing-summarizer-service.js');
-var ConversationStrings = require('./ConversationStrings.js');
+var ConversationStrings = require('./conversation-strings.js');
 var urlObj = require('url');
 var uniqueRandomArray = require('unique-random-array');
 //require('./dicer.js');
@@ -29,7 +29,7 @@ var bot = new builder.UniversalBot(connector);
 server.post('/api/messages', connector.listen());
 var recognizer = new builder.LuisRecognizer('https://westus.api.cognitive.microsoft.com/luis/v2.0/apps/f685cfa9-87d4-4ba0-9c96-a7e02ac8b7d9?subscription-key=1880aee1ec4d4cb1919e61f7547081a0&verbose=true&timezoneOffset=0.0&q=');
 var intents = new builder.IntentDialog({ recognizers: [recognizer] });
-
+bot.dialog('/', intents);
 
 
 
@@ -43,22 +43,73 @@ var intents = new builder.IntentDialog({ recognizers: [recognizer] });
 //=========================================================
 
 
-bot.dialog('/', intents);
 
 
-var dontunderstand = uniqueRandomArray([
-    "I'm sorry. I didn't understand.",
-    "What are you talking about ?",
-    "wtf ?",
-    "What ?",
-    "I like icecream to",
-    "sakkosekk",
-    "I'm sorry. I didn't understand.",
-    "I'm sorry. I didn't understand.",
-    "I'm sorry. I didn't understand."
+intents.onDefault(builder.DialogAction.send(ConversationStrings.dontunderstand()));
+
+
+//testdialog
+intents.matches(/^test1/i, function (session) {
+    session.send(ConversationStrings.dontunderstand());
+});
+
+
+
+
+
+
+//slugtest notes
+intents.matches('FindSlugInDB', [
+    function (session) {
+        builder.Prompts.text(session, 'What do you want me to find ?');
+    },
+    function (session, results) {
+        var http = require("http");
+
+        var adr = "/index.php/test/";
+        adr += results.response;
+        var options = {
+            host: 'noty.no',
+            path: adr
+        };
+        console.log(util.inspect(adr, false, null));
+        http.get(options, function (http_res) {
+            // initialize the container for our data
+            var data = "";
+
+            // this event fires many times, each time collecting another piece of the response
+            http_res.on("data", function (chunk) {
+                // append this chunk to our growing `data` var
+                data += chunk;
+            });
+
+            // this event fires *one* time, after all the `data` events/chunks have been gathered
+            http_res.on("end", function () {
+                // you can use res.send instead of console.log to output via express
+                session.send("I found %s ", data);
+            });
+        });
+    },
 ]);
 
-intents.onDefault(builder.DialogAction.send(dontunderstand()));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -262,34 +313,11 @@ bot.dialog('magicBallDialog', [
     },
     function (session, results) {
         // Use the SDK's built-in ability to pick a response at random.
-        session.endDialog(magicAnswers);
+        session.endDialog(ConversationStrings.magicAnswers);
     }
 ]);
 
-var magicAnswers = [
-    "It is certain",
-    "Who knows ?",
-    "You are wierd",
-    "It is decidedly so",
-    "Without a doubt",
-    "Yes, definitely",
-    "You may rely on it",
-    "As I see it, yes",
-    "Most likely",
-    "Outlook good",
-    "Yes",
-    "Signs point to yes",
-    "Reply hazy try again",
-    "Ask again later",
-    "Better not tell you now",
-    "Cannot predict now",
-    "Concentrate and ask again",
-    "Don't count on it",
-    "My reply is no",
-    "My sources say no",
-    "Outlook not so good",
-    "Very doubtful"
-];
+
 
 //end dicer
 
@@ -372,11 +400,6 @@ intents.matches('GetLastTickHackerWars', [
 
 
 
-
-
-
-
-
 //=========================================================
 // Bots simple shit
 //=========================================================
@@ -424,11 +447,202 @@ intents.matches(/^last tick/i, function (session) {
 
 
 
+
+// Add root menu dialog
+intents.matches(/^help/i, [
+    function (session) {
+        builder.Prompts.choice(session, "Here is what i know:", 'Last tick|play a game|what is a x? or who is x? ect|Flip A Coin|Roll Dice|Magic 8-Ball|Quit');
+    },
+    function (session, results) {
+        switch (results.response.index) {
+            case 0:
+                session.beginDialog('flipCoinDialog');
+                break;
+            case 1:
+                session.beginDialog('rollDiceDialog');
+                break;
+            case 2:
+                session.beginDialog('magicBallDialog');
+                break;
+            default:
+                session.endDialog();
+                break;
+        }
+    },
+    function (session) {
+        // Reload menu
+        session.replaceDialog('rootMenu');
+    }
+]).reloadAction('showMenu', null, { matches: /^(menu|back)/i });
+
+
+
+
+
+
+
+
+
+
+
+
+
 intents.matches(/^version/i, function (session) {
-    session.send('I am Noty v0.03');
+    session.send('I am Noty v0.04');
+});
+
+intents.matches(/^Who are you/i, function (session) {
+    session.send('I am Noty built on Node.js with MS BotFramework using various APIs like luis.ai, bing, bing summary and more. By Håkon Yndestad');
 });
 
 
 
 
 
+
+
+
+
+
+intents.matches(/^herocard/i, [
+    function (session) {
+        builder.Prompts.choice(session, 'What card would like to test?', CardNames, {
+            maxRetries: 3,
+            retryPrompt: 'Ooops, what you wrote is not a valid option, please try again'
+        });
+    },
+    function (session, results) {
+
+        // create the card based on selection
+        var selectedCardName = results.response.entity;
+        var card = createCard(selectedCardName, session);
+
+        // attach the card to the reply message
+        var msg = new builder.Message(session).addAttachment(card);
+        session.send(msg);
+    }
+]);
+
+var HeroCardName = 'Hero card';
+var ThumbnailCardName = 'Thumbnail card'; 
+var ReceiptCardName = 'Receipt card';
+var SigninCardName = 'Sign-in card';
+var AnimationCardName = "Animation card";
+var VideoCardName = "Video card";
+var AudioCardName = "Audio card";
+var CardNames = [HeroCardName, ThumbnailCardName, ReceiptCardName, SigninCardName, AnimationCardName, VideoCardName, AudioCardName];
+
+function createCard(selectedCardName, session) {
+    switch (selectedCardName) {
+        case HeroCardName:
+            return createHeroCard(session);
+        case ThumbnailCardName:
+            return createThumbnailCard(session);
+        case ReceiptCardName:
+            return createReceiptCard(session);
+        case SigninCardName:
+            return createSigninCard(session);
+        case AnimationCardName:
+            return createAnimationCard(session);
+        case VideoCardName:
+            return createVideoCard(session);
+        case AudioCardName:
+            return createAudioCard(session);
+        default:
+            return createHeroCard(session);
+    }
+}
+
+function createHeroCard(session) {
+    return new builder.HeroCard(session)
+        .title('BotFramework Hero Card')
+        .subtitle('Your bots — wherever your users are talking')
+        .text('Build and connect intelligent bots to interact with your users naturally wherever they are, from text/sms to Skype, Slack, Office 365 mail and other popular services.')
+        .images([
+            builder.CardImage.create(session, 'https://sec.ch9.ms/ch9/7ff5/e07cfef0-aa3b-40bb-9baa-7c9ef8ff7ff5/buildreactionbotframework_960.jpg')
+        ])
+        .buttons([
+            builder.CardAction.openUrl(session, 'https://docs.botframework.com/en-us/', 'Get Started')
+        ]);
+}
+
+function createThumbnailCard(session) {
+    return new builder.ThumbnailCard(session)
+        .title('BotFramework Thumbnail Card')
+        .subtitle('Your bots — wherever your users are talking')
+        .text('Build and connect intelligent bots to interact with your users naturally wherever they are, from text/sms to Skype, Slack, Office 365 mail and other popular services.')
+        .images([
+            builder.CardImage.create(session, 'https://sec.ch9.ms/ch9/7ff5/e07cfef0-aa3b-40bb-9baa-7c9ef8ff7ff5/buildreactionbotframework_960.jpg')
+        ])
+        .buttons([
+            builder.CardAction.openUrl(session, 'https://docs.botframework.com/en-us/', 'Get Started')
+        ]);
+}
+
+var order = 1234;
+function createReceiptCard(session) {
+    return new builder.ReceiptCard(session)
+        .title('John Doe')
+        .facts([
+            builder.Fact.create(session, order++, 'Order Number'),
+            builder.Fact.create(session, 'VISA 5555-****', 'Payment Method')
+        ])
+        .items([
+            builder.ReceiptItem.create(session, '$ 38.45', 'Data Transfer')
+                .quantity(368)
+                .image(builder.CardImage.create(session, 'https://github.com/amido/azure-vector-icons/raw/master/renders/traffic-manager.png')),
+            builder.ReceiptItem.create(session, '$ 45.00', 'App Service')
+                .quantity(720)
+                .image(builder.CardImage.create(session, 'https://github.com/amido/azure-vector-icons/raw/master/renders/cloud-service.png'))
+        ])
+        .tax('$ 7.50')
+        .total('$ 90.95')
+        .buttons([
+            builder.CardAction.openUrl(session, 'https://azure.microsoft.com/en-us/pricing/', 'More Information')
+                .image('https://raw.githubusercontent.com/amido/azure-vector-icons/master/renders/microsoft-azure.png')
+        ]);
+}
+
+function createSigninCard(session) {
+    return new builder.SigninCard(session)
+        .text('BotFramework Sign-in Card')
+        .button('Sign-in', 'https://login.microsoftonline.com');
+}
+
+function createAnimationCard(session) {
+    return new builder.AnimationCard(session)
+        .title('Microsoft Bot Framework')
+        .subtitle('Animation Card')
+        .image(builder.CardImage.create(session, 'https://docs.botframework.com/en-us/images/faq-overview/botframework_overview_july.png'))
+        .media([
+            { url: 'http://i.giphy.com/Ki55RUbOV5njy.gif' }
+        ]);
+}
+
+function createVideoCard(session) {
+    return new builder.VideoCard(session)
+        .title('Big Buck Bunny')
+        .subtitle('by the Blender Institute')
+        .text('Big Buck Bunny (code-named Peach) is a short computer-animated comedy film by the Blender Institute, part of the Blender Foundation. Like the foundation\'s previous film Elephants Dream, the film was made using Blender, a free software application for animation made by the same foundation. It was released as an open-source film under Creative Commons License Attribution 3.0.')
+        .image(builder.CardImage.create(session, 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/220px-Big_buck_bunny_poster_big.jpg'))
+        .media([
+            { url: 'http://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4' }
+        ])
+        .buttons([
+            builder.CardAction.openUrl(session, 'https://peach.blender.org/', 'Learn More')
+        ]);
+}
+
+function createAudioCard(session) {
+    return new builder.AudioCard(session)
+        .title('I am your father')
+        .subtitle('Star Wars: Episode V - The Empire Strikes Back')
+        .text('The Empire Strikes Back (also known as Star Wars: Episode V – The Empire Strikes Back) is a 1980 American epic space opera film directed by Irvin Kershner. Leigh Brackett and Lawrence Kasdan wrote the screenplay, with George Lucas writing the film\'s story and serving as executive producer. The second installment in the original Star Wars trilogy, it was produced by Gary Kurtz for Lucasfilm Ltd. and stars Mark Hamill, Harrison Ford, Carrie Fisher, Billy Dee Williams, Anthony Daniels, David Prowse, Kenny Baker, Peter Mayhew and Frank Oz.')
+        .image(builder.CardImage.create(session, 'https://upload.wikimedia.org/wikipedia/en/3/3c/SW_-_Empire_Strikes_Back.jpg'))
+        .media([
+            { url: 'http://www.wavlist.com/movies/004/father.wav' }
+        ])
+        .buttons([
+            builder.CardAction.openUrl(session, 'https://en.wikipedia.org/wiki/The_Empire_Strikes_Back', 'Read More')
+        ]);
+}
